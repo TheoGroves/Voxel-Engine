@@ -47,3 +47,18 @@ class PerlinNoise2D:
                   grad(bb, xf - 1, yf - 1), u)
         
         return lerp(x1, x2, v)
+    
+    def fbm(self, x, y, octaves=4, lacunarity=2.0, gain=0.5):
+        total = 0.0
+        frequency = 1.0
+        amplitude = 1.0
+        max_value = 0.0
+        
+        for _ in range(octaves):
+            total += self.noise(x * frequency, y * frequency) * amplitude
+            max_value += amplitude
+            
+            frequency *= lacunarity
+            amplitude *= gain
+        
+        return total / max_value

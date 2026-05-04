@@ -34,37 +34,30 @@ class World:
 
     def generate_chunk(self, cx, cy, cz, noise: PerlinNoise2D):
         chunk = self.get_chunk(cx, cy, cz)
-        if chunk.generated:
-            return
-        chunk.generated = True
 
         base_x = cx * CHUNK_SIZE
         base_y = cy * CHUNK_SIZE
         base_z = cz * CHUNK_SIZE
 
-        heights = np.zeros((CHUNK_SIZE, CHUNK_SIZE), dtype=np.int32)
+        for lx in range(CHUNK_SIZE):
+            for lz in range(CHUNK_SIZE):
 
-        for x in range(CHUNK_SIZE):
-            wx = base_x + x
-            for z in range(CHUNK_SIZE):
-                wz = base_z + z
+                world_x = base_x + lx
+                world_z = base_z + lz
 
-                h = noise.noise(wx * 0.005, wz * 0.005)
-                heights[x, z] = int((h + 1) * 0.5 * 7)
+                n = noise.fbm((world_x * 0.005) + 10000, (world_z * 0.005) + 10000)
 
-        for x in range(CHUNK_SIZE):
-            for z in range(CHUNK_SIZE):
-                height = heights[x, z]
+                height = int((n + 1) * 0.5 * (CHUNK_SIZE * 4))
 
-                local_top = height - base_y
+                for ly in range(CHUNK_SIZE):
+                    world_y = base_y + ly
 
-                if local_top < 0:
-                    continue
+                    if world_y <= height:
+                        chunk.blocks[lx, ly, lz] = DIRT
+                    else:
+                        chunk.blocks[lx, ly, lz] = AIR
 
-                if local_top >= CHUNK_SIZE:
-                    local_top = CHUNK_SIZE - 1
-
-                chunk.blocks[x, :local_top + 1, z] = DIRT
+        chunk.generated = True
 
     def get_stream_chunks(self, player_pos, render_dist, y_range=3):
         px, py, pz = player_pos

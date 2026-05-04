@@ -46,8 +46,22 @@ class Renderer:
             index_buffer=ibo
         )
 
-        self.chunks[chunk_pos] = (vao, len(indices))
+        self.chunks[chunk_pos] = {
+            "vao": vao,
+            "vbo": vbo,
+            "ibo": ibo,
+            "count": len(indices)
+        }
 
+    def remove_chunk(self, chunk_pos):
+        chunk = self.chunks.pop(chunk_pos, None)
+        if chunk is None:
+            return
+
+        chunk["vao"].release()
+        chunk["vbo"].release()
+        chunk["ibo"].release()
+        
     def render(self, camera):
         self.ctx.enable(moderngl.DEPTH_TEST)
         self.ctx.clear(0.1, 0.1, 0.1)
@@ -60,5 +74,5 @@ class Renderer:
         self.program["view"].write(view.T.tobytes())
         self.program["model"].write(model.T.tobytes())
 
-        for vao, count in self.chunks.values():
-            vao.render()
+        for chunk in self.chunks.values():
+            chunk["vao"].render()
