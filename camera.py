@@ -68,6 +68,11 @@ class Camera:
             if keys[pygame.K_LSHIFT]:
                 self.position -= self.world_up * self.speed * dt
 
+            if keys[pygame.K_LCTRL]:
+                self.speed = 10.0
+            else:
+                self.speed = 5.0
+
             self.update_vectors()
 
     def update_vectors(self):
