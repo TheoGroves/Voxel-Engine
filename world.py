@@ -1,6 +1,8 @@
 import numpy as np
+import random
 
 CHUNK_SIZE = 16
+RENDER_DIST = 4
 
 AIR = 0
 DIRT = 1
@@ -28,9 +30,36 @@ class World:
         chunk = self.get_chunk(cx, cy, cz)
         chunk.set(lx, ly, lz, value)
 
+    def generate_chunk(self, cx, cy, cz):
+        chunk = self.get_chunk(cx, cy, cz)
+        if chunk.generated:
+            return
+        chunk.generated = True
+        for x in range(CHUNK_SIZE):
+            for z in range(CHUNK_SIZE):
+                for y in range(random.randint(1, 5)):
+                    chunk.set(x, y, z, DIRT)
+
+    def get_stream_chunks(self, player_pos, render_dist):
+        px, py, pz = player_pos
+        pcx, pcy, pcz = self.world_to_chunk(px, py, pz)
+        pcx = int(pcx)
+        pcy = int(pcy)
+        pcz = int(pcz)
+
+        needed = set()
+
+        for cx in range(pcx - render_dist, pcx + render_dist + 1):
+            for cy in range(pcy - render_dist, pcy + render_dist + 1):
+                for cz in range(pcz - render_dist, pcz + render_dist + 1):
+                    needed.add((cx, cy, cz))
+
+        return needed
+
 class Chunk:
     def __init__(self):
         self.blocks = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), dtype=np.uint8)
+        self.generated = False
 
     def get(self, x, y, z):
         return self.blocks[x,y,z]

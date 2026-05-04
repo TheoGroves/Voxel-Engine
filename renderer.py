@@ -17,7 +17,7 @@ class Renderer:
         self.ctx.enable(moderngl.CULL_FACE)
         self.ctx.front_face = "ccw"
         self.ctx.cull_face = "back"
-        self.ctx.wireframe = True
+        self.ctx.wireframe = False
         self.width = width
         self.height = height
 
@@ -42,7 +42,7 @@ class Renderer:
 
         vao = self.ctx.vertex_array(
             self.program,
-            [(vbo, "3f", "aPos")],
+            [(vbo, "3f 3f", "aPos", "aNormal")],
             index_buffer=ibo
         )
 

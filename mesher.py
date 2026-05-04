@@ -57,14 +57,11 @@ def build_chunk_mesh(world, chunk_pos):
 
                     corners = FACE_VERTS[(fx, fy, fz)]
 
-                    base = [
-                        np.array(corners[0]) + [wx, wy, wz],
-                        np.array(corners[1]) + [wx, wy, wz],
-                        np.array(corners[2]) + [wx, wy, wz],
-                        np.array(corners[3]) + [wx, wy, wz],
-                    ]
+                    normal = np.array([fx, fy, fz], dtype=np.float32)
 
-                    verts.extend(base)
+                    for corner in corners:
+                        pos = np.array(corner, dtype=np.float32) + np.array([wx, wy, wz], dtype=np.float32)
+                        verts.append((pos[0], pos[1], pos[2], normal[0], normal[1], normal[2]))
 
                     indices.extend([
                         index_offset, index_offset + 1, index_offset + 2,
