@@ -1,6 +1,5 @@
 import os
 import moderngl
-import numpy as np
 from matrices import perspective, get_model_matrix
 
 shader_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shaders")
@@ -42,7 +41,7 @@ class Renderer:
 
         vao = self.ctx.vertex_array(
             self.program,
-            [(vbo, "3f 3f", "aPos", "aNormal")],
+            [(vbo, "3f 3f 3f", "aPos", "aNormal", "aColor")],
             index_buffer=ibo
         )
 

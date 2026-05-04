@@ -6,6 +6,8 @@ RENDER_DIST = 4
 
 AIR = 0
 DIRT = 1
+GRASS = 2
+ROCK = 3
 
 class World:
     def __init__(self):
@@ -47,13 +49,27 @@ class World:
 
                 n = noise.fbm((world_x * 0.005) + 10000, (world_z * 0.005) + 10000)
 
-                height = int((n + 1) * 0.5 * (CHUNK_SIZE * 4))
+                height = int((n + 1) * 0.5 * (CHUNK_SIZE * 8))
 
                 for ly in range(CHUNK_SIZE):
                     world_y = base_y + ly
 
                     if world_y <= height:
-                        chunk.blocks[lx, ly, lz] = DIRT
+                        eps = 1.0
+                        h  = noise.fbm(world_x * 0.005 + 10000, world_z * 0.005 + 10000)
+                        hx = noise.fbm((world_x + eps) * 0.005 + 10000, world_z * 0.005 + 10000)
+                        hz = noise.fbm(world_x * 0.005 + 10000, (world_z + eps) * 0.005 + 10000)
+                        dx = hx - h
+                        dz = hz - h
+                        steepness = (dx*dx + dz*dz) ** 0.5
+                        steepness *= 100                        
+                        block = GRASS
+                        if steepness > 0.6:
+                            block = DIRT
+                        if steepness > 1:
+                            block = ROCK
+
+                        chunk.blocks[lx, ly, lz] = block
                     else:
                         chunk.blocks[lx, ly, lz] = AIR
 
