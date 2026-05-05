@@ -11,6 +11,7 @@ from mesher import build_chunk_mesh
 from perlin import PerlinNoise2D
 
 SUPPRESS_WARNINGS = True
+SUPPRESS_GEN = True
 
 RENDER_DIST = 8
 streamed_chunks = set()
@@ -29,6 +30,9 @@ upload_queue = Queue()
 
 last_generated_time = time.perf_counter()
 last_meshed_time = time.perf_counter()
+
+generated_chunks = set()
+meshed_chunks = set()
 
 cam_pos = (0,0,0)
 cam_last_pos = (0,0,0)
@@ -60,6 +64,7 @@ def gen_worker():
         get_t = time.perf_counter()-get_s
         gen_s = time.perf_counter()
         world.generate_chunk(cx, cy, cz, pn)
+        generated_chunks.add(pos)
         gen_t = time.perf_counter()-gen_s
 
         cx, cy, cz = pos
@@ -70,7 +75,7 @@ def gen_worker():
         with mesh_lock:
             heapq.heappush(mesh_queue, (priority, pos))
         fin_time = time.perf_counter()-s
-        if not SUPPRESS_WARNINGS:
+        if not SUPPRESS_WARNINGS and not SUPPRESS_GEN:
             if fin_time*1000 > 5:
                 error = "SLOW GENERATION"
                 if fin_time*1000 > 20:
@@ -91,6 +96,7 @@ def mesh_worker():
             continue
 
         v, i = build_chunk_mesh(world, pos)
+        meshed_chunks.add(pos)
         last_meshed_time = time.perf_counter()
 
         if len(i) > 0:
@@ -101,9 +107,17 @@ threading.Thread(target=mesh_worker, daemon=True).start()
 def monitor():
     while True:
         if time.perf_counter() - last_generated_time > 1.0 and not SUPPRESS_WARNINGS:
-            print("[WARNING] No chunks are being generated")
+            print("[WARNING] No chunks have been generated in the last second")
         if time.perf_counter() - last_meshed_time > 1.0 and not SUPPRESS_WARNINGS:
-            print("[WARNING] No chunks are being meshed")
+            print(f"[WARNING] No chunks have been meshed in the last second, last meshed {(time.perf_counter() - last_meshed_time)*1000:.1f}ms ago")
+        if not SUPPRESS_WARNINGS:
+            print(
+                "[Debug] "
+                f"Streamed: {len(streamed_chunks)}/{len(needed_now)} | "
+                f"Generated: {len(generated_chunks)}/{len(needed_now)} | "
+                f"Meshed: {len(meshed_chunks)}/{len(needed_now)}"
+            )
+
 
         time.sleep(0.5)
 
