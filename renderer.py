@@ -49,7 +49,8 @@ class Renderer:
             "vao": vao,
             "vbo": vbo,
             "ibo": ibo,
-            "count": len(indices)
+            "count": len(indices),
+            "triangles": len(indices) // 3
         }
 
     def remove_chunk(self, chunk_pos):
@@ -75,3 +76,5 @@ class Renderer:
 
         for chunk in self.chunks.values():
             chunk["vao"].render()
+
+        return sum(chunk["triangles"] for chunk in self.chunks.values())

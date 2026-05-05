@@ -1,153 +1,178 @@
 import numpy as np
+from numba import njit
 import time
-
-BLOCK_COLORS = {
-    1: (0.49, 0.416, 0.369),
-    2: (0.561, 0.71, 0.518),
-    3: (0.5, 0.5, 0.5),
-}
-
-FACES = [
-    (0, 0, 1),
-    (0, 0, -1),
-    (0, 1, 0),
-    (0, -1, 0),
-    (1, 0, 0),
-    (-1, 0, 0),
-]
-
-FACE_VERTS = {
-    (0, 0, 1):  [(0,0,1),(1,0,1),(1,1,1),(0,1,1)],
-    (0, 0,-1):  [(1,0,0),(0,0,0),(0,1,0),(1,1,0)],
-    (0, 1, 0):  [(0,1,1),(1,1,1),(1,1,0),(0,1,0)],
-    (0,-1, 0):  [(0,0,0),(1,0,0),(1,0,1),(0,0,1)],
-    (1, 0, 0):  [(1,0,1),(1,0,0),(1,1,0),(1,1,1)],
-    (-1,0, 0):  [(0,0,0),(0,0,1),(0,1,1),(0,1,0)],
-}
 
 CHUNK_SIZE = 16
 
-def is_solid(world, wx, wy, wz):
-    cx, cy, cz = world.world_to_chunk(wx, wy, wz)
-    lx, ly, lz = world.local_pos(wx, wy, wz)
+color_table = np.zeros((256, 3), dtype=np.float32)
+color_table[1] = (0.49, 0.416, 0.369)
+color_table[2] = (0.561, 0.71, 0.518)
+color_table[3] = (0.5, 0.5, 0.5)
 
-    chunk = world.get_chunk(cx, cy, cz)
-    return chunk.get(lx, ly, lz) != 0
+FACES = np.array([
+    [0,0,1],
+    [0,0,-1],
+    [0,1,0],
+    [0,-1,0],
+    [1,0,0],
+    [-1,0,0],
+], dtype=np.int32)
+
+FACE_VERTS = np.array([
+    [[0,0,1],[1,0,1],[1,1,1],[0,1,1]],
+    [[1,0,0],[0,0,0],[0,1,0],[1,1,0]],
+    [[0,1,1],[1,1,1],[1,1,0],[0,1,0]],
+    [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+    [[1,0,1],[1,0,0],[1,1,0],[1,1,1]],
+    [[0,0,0],[0,0,1],[0,1,1],[0,1,0]],
+], dtype=np.float32)
 
 t_sum = 0
 t_num = 0
 
-def build_chunk_mesh(world, chunk_pos):
-    global t_sum, t_num
-    start = time.perf_counter()
+def build_padded(world, chunk_pos):
     cx, cy, cz = chunk_pos
+    size = CHUNK_SIZE
+
+    padded = np.zeros((size+2, size+2, size+2), dtype=np.uint8)
+
     chunk = world.get_chunk(cx, cy, cz)
 
+    for x in range(size):
+        for y in range(size):
+            for z in range(size):
+                padded[x+1, y+1, z+1] = chunk.get(x, y, z)
+
+    directions = [
+        (1,0,0), (-1,0,0),
+        (0,1,0), (0,-1,0),
+        (0,0,1), (0,0,-1),
+    ]
+
+    for fx, fy, fz in directions:
+        neighbor = world.get_chunk(cx+fx, cy+fy, cz+fz)
+        if neighbor is None:
+            continue
+
+        for i in range(size):
+            for j in range(size):
+                if fx == 1:
+                    padded[size+1, i+1, j+1] = neighbor.get(0, i, j)
+                elif fx == -1:
+                    padded[0, i+1, j+1] = neighbor.get(size-1, i, j)
+
+                elif fy == 1:
+                    padded[i+1, size+1, j+1] = neighbor.get(i, 0, j)
+                elif fy == -1:
+                    padded[i+1, 0, j+1] = neighbor.get(i, size-1, j)
+
+                elif fz == 1:
+                    padded[i+1, j+1, size+1] = neighbor.get(i, j, 0)
+                elif fz == -1:
+                    padded[i+1, j+1, 0] = neighbor.get(i, j, size-1)
+
+    return padded
+
+@njit("Tuple((f4[:, :], u4[:]))(u1[:, :, :], i4[:, :], f4[:, :, :], f4[:, :], i4, i4, i4)",cache=True, fastmath=True)
+def mesh_core(padded, faces, face_verts, colors, base_x, base_y, base_z):
+    size = 16
+
+    max_verts = size*size*size*24
+    max_indices = size*size*size*36
+
+    verts = np.empty((max_verts, 9), dtype=np.float32)
+    indices = np.empty((max_indices,), dtype=np.uint32)
+
+    v_i = 0
+    i_i = 0
+    index_offset = 0
+
+    for x in range(size):
+        px = x + 1
+        wx = base_x + x
+
+        for y in range(size):
+            py = y + 1
+            wy = base_y + y
+
+            for z in range(size):
+                pz = z + 1
+                block_type = int(padded[px, py, pz])
+                if block_type == 0:
+                    continue
+
+                wz = base_z + z
+
+                r = colors[block_type, 0]
+                g = colors[block_type, 1]
+                b = colors[block_type, 2]
+
+                for f in range(6):
+                    fx = int(faces[f, 0])
+                    fy = int(faces[f, 1])
+                    fz = int(faces[f, 2])
+
+                    if padded[px+fx, py+fy, pz+fz] != 0:
+                        continue
+
+                    base = index_offset
+
+                    for k in range(4):
+                        cx_ = face_verts[f, k, 0]
+                        cy_ = face_verts[f, k, 1]
+                        cz_ = face_verts[f, k, 2]
+
+                        verts[v_i, 0] = cx_ + wx
+                        verts[v_i, 1] = cy_ + wy
+                        verts[v_i, 2] = cz_ + wz
+                        verts[v_i, 3] = fx
+                        verts[v_i, 4] = fy
+                        verts[v_i, 5] = fz
+                        verts[v_i, 6] = r
+                        verts[v_i, 7] = g
+                        verts[v_i, 8] = b
+
+                        v_i += 1
+
+                    indices[i_i+0] = base+0
+                    indices[i_i+1] = base+1
+                    indices[i_i+2] = base+2
+                    indices[i_i+3] = base+2
+                    indices[i_i+4] = base+3
+                    indices[i_i+5] = base+0
+
+                    i_i += 6
+                    index_offset += 4
+
+    return verts[:v_i], indices[:i_i]
+
+def build_chunk_mesh(world, chunk_pos, suppress, suppress_m):
+    cx, cy, cz = chunk_pos
+    size = CHUNK_SIZE
+
+    chunk = world.get_chunk(cx, cy, cz)
     if chunk.is_empty_cache:
         return (
             np.empty((0, 9), dtype=np.float32),
             np.empty((0,), dtype=np.uint32)
         )
 
-    size = CHUNK_SIZE
+    padded = build_padded(world, chunk_pos)
 
-    chunk_get = chunk.get
-    world_get_chunk = world.get_chunk
-    world_to_chunk = world.world_to_chunk
-    local_pos = world.local_pos
+    base_x = cx * size
+    base_y = cy * size
+    base_z = cz * size
 
-    faces = FACES
-    face_verts = FACE_VERTS
-    colors = BLOCK_COLORS
-
-    chunk_world_x = cx * size
-    chunk_world_y = cy * size
-    chunk_world_z = cz * size
-
-    MAX_VERTS = size * size * size * 24
-    MAX_INDICES = size * size * size * 36
-
-    verts = np.empty((MAX_VERTS, 9), dtype=np.float32)
-    indices = np.empty((MAX_INDICES,), dtype=np.uint32)
-
-    v_i = 0
-    i_i = 0
-    index_offset = 0
-
-    chunk_cache = {(cx, cy, cz): chunk}
-
-    def get_chunk_cached(ccx, ccy, ccz):
-        key = (ccx, ccy, ccz)
-        if key not in chunk_cache:
-            chunk_cache[key] = world_get_chunk(ccx, ccy, ccz)
-        return chunk_cache[key]
-
-    for x in range(size):
-        wx = chunk_world_x + x
-
-        for y in range(size):
-            wy = chunk_world_y + y
-
-            for z in range(size):
-                block_type = chunk_get(x, y, z)
-                if block_type == 0:
-                    continue
-
-                wz = chunk_world_z + z
-
-                color = colors[block_type]
-                r, g, b = color
-
-                for fx, fy, fz in faces:
-
-                    nlx = x + fx
-                    nly = y + fy
-                    nlz = z + fz
-
-                    if 0 <= nlx < size and 0 <= nly < size and 0 <= nlz < size:
-                        if chunk_get(nlx, nly, nlz) != 0:
-                            continue
-                    else:
-                        nx = wx + fx
-                        ny = wy + fy
-                        nz = wz + fz
-
-                        ncx, ncy, ncz = world_to_chunk(nx, ny, nz)
-                        neighbor_chunk = get_chunk_cached(ncx, ncy, ncz)
-                        nlx, nly, nlz = local_pos(nx, ny, nz)
-
-                        if neighbor_chunk.get(nlx, nly, nlz) != 0:
-                            continue
-
-                    corners = face_verts[(fx, fy, fz)]
-                    nxn, nyn, nzn = fx, fy, fz
-
-                    base = v_i
-
-                    for cx_, cy_, cz_ in corners:
-                        verts[v_i] = (
-                            cx_ + wx,
-                            cy_ + wy,
-                            cz_ + wz,
-                            nxn, nyn, nzn,
-                            r, g, b
-                        )
-                        v_i += 1
-
-                    indices[i_i + 0] = base + 0
-                    indices[i_i + 1] = base + 1
-                    indices[i_i + 2] = base + 2
-                    indices[i_i + 3] = base + 2
-                    indices[i_i + 4] = base + 3
-                    indices[i_i + 5] = base + 0
-
-                    i_i += 6
-                    index_offset += 4
-
-    t_sum += (time.perf_counter()-start)*1000
-    t_num += 1
-    print(f"[DEBUG] - Meshing: {t_sum/t_num:.1f}ms/chunk. Estimating {((t_sum/t_num) / 1000) * 2023 / 60:.1f} minutes to complete.")
-    return (
-        verts[:v_i].copy(),
-        indices[:i_i].copy()
+    s = time.perf_counter()
+    verts, indices = mesh_core(
+        padded,
+        FACES,
+        FACE_VERTS,
+        color_table,
+        base_x, base_y, base_z
     )
+    
+    if not suppress and not suppress_m:
+        print(f"[DEBUG] - Meshing: {(time.perf_counter()-s)*1000:.2f}ms/chunk")
+
+    return verts, indices

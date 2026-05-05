@@ -53,12 +53,12 @@ class World:
             for lz in range(CHUNK_SIZE+1):
                 wx = base_x + lx
                 wz = base_z + lz
-                heightmap[lx, lz] = noise.fbm(wx * 0.005 + 10000, wz * 0.005 + 10000)
+                heightmap[lx, lz] = ((noise.fbm(wx * 0.005 + 10000, wz * 0.005 + 10000, 5) + 1) * 0.5) ** 3
 
         for lx in range(CHUNK_SIZE):
             for lz in range(CHUNK_SIZE):
                 h  = heightmap[lx, lz]
-                height = int((h + 1) * 0.5 * (CHUNK_SIZE * 8))
+                height = int(h * (CHUNK_SIZE * 16))
 
                 for ly in range(CHUNK_SIZE):
                     world_y = base_y + ly
@@ -71,9 +71,9 @@ class World:
                         steepness = (dx*dx + dz*dz) ** 0.5
                         steepness *= 100                        
                         block = GRASS
-                        if steepness > 0.6:
+                        if steepness > 0.25:
                             block = DIRT
-                        if steepness > 1:
+                        if steepness > 0.5:
                             block = ROCK
 
                         chunk.blocks[lx, ly, lz] = block

@@ -10,8 +10,10 @@ from world import World
 from mesher import build_chunk_mesh
 from perlin import PerlinNoise2D
 
-SUPPRESS_WARNINGS = True
+SUPPRESS_WARNINGS = False
 SUPPRESS_GEN = True
+SUPPRESS_MESHING = True
+SUPPRESS_TRIS = True
 
 RENDER_DIST = 8
 streamed_chunks = set()
@@ -95,7 +97,7 @@ def mesh_worker():
         if pos not in needed_snapshot:
             continue
 
-        v, i = build_chunk_mesh(world, pos)
+        v, i = build_chunk_mesh(world, pos, SUPPRESS_WARNINGS, SUPPRESS_MESHING)
         meshed_chunks.add(pos)
         last_meshed_time = time.perf_counter()
 
@@ -107,17 +109,16 @@ threading.Thread(target=mesh_worker, daemon=True).start()
 def monitor():
     while True:
         if time.perf_counter() - last_generated_time > 1.0 and not SUPPRESS_WARNINGS:
-            print("[WARNING] No chunks have been generated in the last second")
+            print(f"[WARNING] No chunks have been generated in the last second, last generated {(time.perf_counter() - last_generated_time)*1000:.1f}ms ago")
         if time.perf_counter() - last_meshed_time > 1.0 and not SUPPRESS_WARNINGS:
             print(f"[WARNING] No chunks have been meshed in the last second, last meshed {(time.perf_counter() - last_meshed_time)*1000:.1f}ms ago")
         if not SUPPRESS_WARNINGS:
             print(
-                "[Debug] "
+                "[DEBUG] "
                 f"Streamed: {len(streamed_chunks)}/{len(needed_now)} | "
                 f"Generated: {len(generated_chunks)}/{len(needed_now)} | "
                 f"Meshed: {len(meshed_chunks)}/{len(needed_now)}"
             )
-
 
         time.sleep(0.5)
 
@@ -184,7 +185,9 @@ while True:
         pos, v, i = upload_queue.get()
         renderer.upload_chunk_mesh(pos, v, i)
 
-    renderer.render(cam)
+    tot_tris = renderer.render(cam)
+    if not SUPPRESS_WARNINGS and not SUPPRESS_TRIS:
+        print(f"[DEBUG] {tot_tris} triangles are being rendered")
     pygame.display.set_caption(f"Voxel Engine | FPS: {clock.get_fps():.1f}")
     pygame.display.flip()
     dt = clock.tick(60) / 1000.0
