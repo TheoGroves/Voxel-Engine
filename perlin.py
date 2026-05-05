@@ -2,22 +2,27 @@ import math
 import random
 import time
 
-def fade(t):
+import numpy as np
+
+def grad_np(h, x, y):
+    h = h & 3
+
+    return np.where(
+        h == 0, x + y,
+        np.where(
+            h == 1, -x + y,
+            np.where(
+                h == 2, x - y,
+                -x - y
+            )
+        )
+    )
+
+def fade_np(t):
     return t * t * t * (t * (t * 6 - 15) + 10)
 
-def lerp(a, b, t):
-    return a + t * (b-a)
-
-def grad(hash, x, y):
-    h = hash & 3
-    if h == 0:
-        return x + y
-    elif h == 1:
-        return -x + y
-    elif h == 2:
-        return x - y
-    else:
-        return -x - y
+def lerp_np(a, b, t):
+    return a + t * (b - a)
     
 class PerlinNoise2D:
     def __init__(self, seed=time.time()):
@@ -25,40 +30,51 @@ class PerlinNoise2D:
         random.shuffle(self.p)
         self.p += self.p
 
-    def noise(self, x, y):
-        xi = int(x) & 255
-        yi = int(y) & 255
+    def noise_np(self, x, y):
+        x = np.asarray(x)
+        y = np.asarray(y)
 
-        xf = x - int(x)
-        yf = y - int(y)
+        xi = (x.astype(int)) & 255
+        yi = (y.astype(int)) & 255
 
-        u = fade(xf)
-        v = fade(yf)
+        xf = x - x.astype(int)
+        yf = y - y.astype(int)
 
-        aa = self.p[self.p[xi] + yi]
-        ab = self.p[self.p[xi] + yi + 1]
-        ba = self.p[self.p[xi + 1] + yi]
-        bb = self.p[self.p[xi + 1] + yi + 1]
+        u = fade_np(xf)
+        v = fade_np(yf)
 
-        x1 = lerp(grad(aa, xf, yf),
-                  grad(ba, xf - 1, yf), u)
+        p = np.array(self.p)
 
-        x2 = lerp(grad(ab, xf, yf - 1),
-                  grad(bb, xf - 1, yf - 1), u)
-        
-        return lerp(x1, x2, v)
+        aa = p[p[xi] + yi]
+        ab = p[p[xi] + yi + 1]
+        ba = p[p[xi + 1] + yi]
+        bb = p[p[xi + 1] + yi + 1]
+
+        x1 = lerp_np(
+            grad_np(aa, xf, yf),
+            grad_np(ba, xf - 1, yf),
+            u
+        )
+
+        x2 = lerp_np(
+            grad_np(ab, xf, yf - 1),
+            grad_np(bb, xf - 1, yf - 1),
+            u
+        )
+
+        return lerp_np(x1, x2, v)
     
     def fbm(self, x, y, octaves=4, lacunarity=2.0, gain=0.5):
-        total = 0.0
+        total = np.zeros_like(x, dtype=np.float32)
         frequency = 1.0
         amplitude = 1.0
         max_value = 0.0
-        
+
         for _ in range(octaves):
-            total += self.noise(x * frequency, y * frequency) * amplitude
+            total += self.noise_np(x * frequency, y * frequency) * amplitude
             max_value += amplitude
-            
+
             frequency *= lacunarity
             amplitude *= gain
-        
+
         return total / max_value

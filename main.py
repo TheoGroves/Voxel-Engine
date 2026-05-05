@@ -10,7 +10,7 @@ from world import World
 from mesher import build_chunk_mesh
 from perlin import PerlinNoise2D
 
-SUPPRESS_WARNINGS = False
+SUPPRESS_WARNINGS = True
 SUPPRESS_GEN = True
 SUPPRESS_MESHING = True
 SUPPRESS_TRIS = True

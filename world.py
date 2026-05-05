@@ -1,5 +1,6 @@
 from perlin import PerlinNoise2D
 import numpy as np
+from numba import njit, uint8, float32, int32, void
 
 CHUNK_SIZE = 16
 RENDER_DIST = 4
@@ -8,6 +9,37 @@ AIR = 0
 DIRT = 1
 GRASS = 2
 ROCK = 3
+
+@njit(void(uint8[:, :, :], float32[:, :], int32), cache=True, fastmath=True)
+def fill_chunk(blocks, heightmap, base_y):
+    size = blocks.shape[0]
+
+    for lx in range(size):
+        for lz in range(size):
+            h = heightmap[lx, lz]
+            height = int(h * (size * 16))
+
+            hx = heightmap[lx+1, lz]
+            hz = heightmap[lx, lz+1]
+
+            dx = hx - h
+            dz = hz - h
+            steepness = (dx*dx + dz*dz) ** 0.5 * 100
+
+            for ly in range(size):
+                world_y = base_y + ly
+
+                if world_y <= height:
+                    if steepness > 0.5:
+                        block = 3
+                    elif steepness > 0.25:
+                        block = 1
+                    else:
+                        block = 2
+                else:
+                    block = 0
+
+                blocks[lx, ly, lz] = block
 
 class World:
     def __init__(self):
@@ -49,41 +81,21 @@ class World:
 
         heightmap = np.zeros((CHUNK_SIZE+1, CHUNK_SIZE+1))
 
-        for lx in range(CHUNK_SIZE+1):
-            for lz in range(CHUNK_SIZE+1):
-                wx = base_x + lx
-                wz = base_z + lz
-                heightmap[lx, lz] = ((noise.fbm(wx * 0.005 + 10000, wz * 0.005 + 10000, 5) + 1) * 0.5) ** 3
+        xs = np.arange(base_x, base_x + CHUNK_SIZE + 1)
+        zs = np.arange(base_z, base_z + CHUNK_SIZE + 1)
 
-        for lx in range(CHUNK_SIZE):
-            for lz in range(CHUNK_SIZE):
-                h  = heightmap[lx, lz]
-                height = int(h * (CHUNK_SIZE * 16))
+        wx, wz = np.meshgrid(xs, zs, indexing='ij')
 
-                for ly in range(CHUNK_SIZE):
-                    world_y = base_y + ly
+        heightmap = ((noise.fbm(wx * 0.005 + 10000,
+                                wz * 0.005 + 10000,
+                                5) + 1) * 0.5) ** 3
 
-                    if world_y <= height:
-                        hx = heightmap[lx+1, lz]
-                        hz = heightmap[lx, lz+1]
-                        dx = hx - h
-                        dz = hz - h
-                        steepness = (dx*dx + dz*dz) ** 0.5
-                        steepness *= 100                        
-                        block = GRASS
-                        if steepness > 0.25:
-                            block = DIRT
-                        if steepness > 0.5:
-                            block = ROCK
-
-                        chunk.blocks[lx, ly, lz] = block
-                    else:
-                        chunk.blocks[lx, ly, lz] = AIR
+        fill_chunk(chunk.blocks, heightmap, base_y)
 
         chunk.generated = True
         self.update_chunk_flags(chunk)
 
-    def get_stream_chunks(self, player_pos, render_dist, y_range=3):
+    def get_stream_chunks(self, player_pos, render_dist, y_range=6):
         px, py, pz = player_pos
         pcx, pcy, pcz = self.world_to_chunk(px, py, pz)
         pcx = int(pcx)
