@@ -41,7 +41,7 @@ cam_pos = (0,0,0)
 cam_last_pos = (0,0,0)
 
 th = TextureHandler(1024, 1024)
-th.pack(["textures/Empty.png", "textures/dirt.png", "textures/Grass.png", "textures/Rock.png"])
+th.pack(["textures/Empty.png", "textures/dirt.png", "textures/Grass.png", "textures/Rock.png", "textures/Cobblestone.png"])
 th.save_atlas("textures/atlas.png")
 uv_table = th.build_uv_table()
 
@@ -92,6 +92,23 @@ def gen_worker():
 
 threading.Thread(target=gen_worker, daemon=True).start()
 
+def should_mesh(world, chunk_pos):
+    directions = [
+        (1, 0, 0),
+        (-1, 0, 0),
+        (0, 1, 0),
+        (0, -1, 0),
+        (0, 0, 1),
+        (0, 0, -1)
+    ]
+
+    cx, cy, cz = chunk_pos
+    for dx, dy, dz in directions:
+        n = world.get_chunk(cx+dx, cy+dy, cz+dz)
+        if n is None or not n.generated:
+            return False
+    return True
+
 def mesh_worker():
     global last_meshed_time
     while True:
@@ -102,6 +119,11 @@ def mesh_worker():
 
         if pos not in needed_snapshot:
             continue
+
+        if not should_mesh(world, pos):
+            with mesh_lock:
+                heapq.heappush(mesh_queue, (priority + 1, pos))
+            continue 
 
         v, i = build_chunk_mesh(world, pos, SUPPRESS_WARNINGS, SUPPRESS_MESHING, uv_table)
         meshed_chunks.add(pos)

@@ -9,6 +9,7 @@ AIR = 0
 DIRT = 1
 GRASS = 2
 ROCK = 3
+COBBLE = 4
 
 @njit(void(uint8[:, :, :], float32[:, :], int32), cache=True, fastmath=True)
 def fill_chunk(blocks, heightmap, base_y):
@@ -29,14 +30,24 @@ def fill_chunk(blocks, heightmap, base_y):
             for ly in range(size):
                 world_y = base_y + ly
 
-                if world_y <= height:
+                if world_y == height: # Top layer by steepness
                     if steepness > 0.5:
-                        block = 3
+                        if np.random.random_sample() > 0.3:
+                            block = 3
+                        else:
+                            block = 4
                     elif steepness > 0.25:
                         block = 1
                     else:
                         block = 2
-                else:
+                elif world_y <= height-4: # Below dirt is rock
+                    block = 3
+                elif world_y <= height-1: # Just below top layer is dirt/rock
+                    if steepness > 0.5:
+                        block = 3
+                    else:
+                        block = 1
+                else: # Everything else is air
                     block = 0
 
                 blocks[lx, ly, lz] = block
