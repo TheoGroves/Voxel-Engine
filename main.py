@@ -9,13 +9,14 @@ from camera import Camera
 from world import World
 from mesher import build_chunk_mesh
 from perlin import PerlinNoise2D
+from texture_handler import TextureHandler
 
 SUPPRESS_WARNINGS = True
 SUPPRESS_GEN = True
 SUPPRESS_MESHING = True
 SUPPRESS_TRIS = True
 
-RENDER_DIST = 8
+RENDER_DIST = 4
 streamed_chunks = set()
 needed_now = set()
 needed_snapshot = set()
@@ -38,6 +39,11 @@ meshed_chunks = set()
 
 cam_pos = (0,0,0)
 cam_last_pos = (0,0,0)
+
+th = TextureHandler(1024, 1024)
+th.pack(["textures/Empty.png", "textures/dirt.png", "textures/Grass.png", "textures/Rock.png"])
+th.save_atlas("textures/atlas.png")
+uv_table = th.build_uv_table()
 
 def gen_worker():
     global last_generated_time
@@ -97,7 +103,7 @@ def mesh_worker():
         if pos not in needed_snapshot:
             continue
 
-        v, i = build_chunk_mesh(world, pos, SUPPRESS_WARNINGS, SUPPRESS_MESHING)
+        v, i = build_chunk_mesh(world, pos, SUPPRESS_WARNINGS, SUPPRESS_MESHING, uv_table)
         meshed_chunks.add(pos)
         last_meshed_time = time.perf_counter()
 
@@ -132,6 +138,7 @@ screen = pygame.display.set_mode((screen_width, screen_height), pygame.OPENGL | 
 ctx = moderngl.create_context()
 
 renderer = Renderer(ctx, screen_width, screen_height)
+renderer.load_atlas(th.atlas)
 
 cam = Camera()
 

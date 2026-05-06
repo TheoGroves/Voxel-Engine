@@ -41,7 +41,7 @@ class Renderer:
 
         vao = self.ctx.vertex_array(
             self.program,
-            [(vbo, "3f 3f 3f", "aPos", "aNormal", "aColor")],
+            [(vbo, "3f 3f 2f", "aPos", "aNormal", "uvCoords")],
             index_buffer=ibo
         )
 
@@ -61,6 +61,15 @@ class Renderer:
         chunk["vao"].release()
         chunk["vbo"].release()
         chunk["ibo"].release()
+
+    def load_atlas(self, image):
+        tex = self.ctx.texture(image.size, 4, image.tobytes())
+        tex.build_mipmaps()
+        tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        tex.use(location=0)
+
+        self.program["atlas"] = 0
+        self.atlas = tex
         
     def render(self, camera):
         self.ctx.enable(moderngl.DEPTH_TEST)
@@ -73,6 +82,7 @@ class Renderer:
         self.program["projection"].write(proj.T.tobytes())
         self.program["view"].write(view.T.tobytes())
         self.program["model"].write(model.T.tobytes())
+        self.atlas.use(location=0)
 
         for chunk in self.chunks.values():
             chunk["vao"].render()

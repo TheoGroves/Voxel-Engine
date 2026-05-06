@@ -4,10 +4,14 @@ import time
 
 CHUNK_SIZE = 16
 
-color_table = np.zeros((256, 3), dtype=np.float32)
-color_table[1] = (0.49, 0.416, 0.369)
-color_table[2] = (0.561, 0.71, 0.518)
-color_table[3] = (0.5, 0.5, 0.5)
+FACE_UVS = np.array([
+    [[0,0],[1,0],[1,1],[0,1]],
+    [[0,0],[1,0],[1,1],[0,1]],
+    [[0,0],[1,0],[1,1],[0,1]],
+    [[0,0],[1,0],[1,1],[0,1]],
+    [[0,0],[1,0],[1,1],[0,1]],
+    [[0,0],[1,0],[1,1],[0,1]],
+], dtype=np.float32)
 
 FACES = np.array([
     [0,0,1],
@@ -73,14 +77,14 @@ def build_padded(world, chunk_pos):
 
     return padded
 
-@njit("Tuple((f4[:, :], u4[:]))(u1[:, :, :], i4[:, :], f4[:, :, :], f4[:, :], i4, i4, i4)",cache=True, fastmath=True)
-def mesh_core(padded, faces, face_verts, colors, base_x, base_y, base_z):
+@njit("Tuple((f4[:, :], u4[:]))(u1[:, :, :], i4[:, :], f4[:, :, :], f4[:, :], f4[:, :, :], i4, i4, i4)", cache=True, fastmath=True)
+def mesh_core(padded, faces, face_verts, uv_table, face_uvs, base_x, base_y, base_z):
     size = 16
 
     max_verts = size*size*size*24
     max_indices = size*size*size*36
 
-    verts = np.empty((max_verts, 9), dtype=np.float32)
+    verts = np.empty((max_verts, 8), dtype=np.float32)
     indices = np.empty((max_indices,), dtype=np.uint32)
 
     v_i = 0
@@ -103,9 +107,7 @@ def mesh_core(padded, faces, face_verts, colors, base_x, base_y, base_z):
 
                 wz = base_z + z
 
-                r = colors[block_type, 0]
-                g = colors[block_type, 1]
-                b = colors[block_type, 2]
+                u0, v0, u1, v1 = uv_table[block_type]
 
                 for f in range(6):
                     fx = int(faces[f, 0])
@@ -122,15 +124,20 @@ def mesh_core(padded, faces, face_verts, colors, base_x, base_y, base_z):
                         cy_ = face_verts[f, k, 1]
                         cz_ = face_verts[f, k, 2]
 
+                        fu = face_uvs[f, k, 0]
+                        fv = face_uvs[f, k, 1]
+
+                        u = u0 + fu * (u1 - u0)
+                        v = v0 + fv * (v1 - v0)
+
                         verts[v_i, 0] = cx_ + wx
                         verts[v_i, 1] = cy_ + wy
                         verts[v_i, 2] = cz_ + wz
                         verts[v_i, 3] = fx
                         verts[v_i, 4] = fy
                         verts[v_i, 5] = fz
-                        verts[v_i, 6] = r
-                        verts[v_i, 7] = g
-                        verts[v_i, 8] = b
+                        verts[v_i, 6] = u
+                        verts[v_i, 7] = v
 
                         v_i += 1
 
@@ -146,7 +153,7 @@ def mesh_core(padded, faces, face_verts, colors, base_x, base_y, base_z):
 
     return verts[:v_i], indices[:i_i]
 
-def build_chunk_mesh(world, chunk_pos, suppress, suppress_m):
+def build_chunk_mesh(world, chunk_pos, suppress, suppress_m, uv_table):
     cx, cy, cz = chunk_pos
     size = CHUNK_SIZE
 
@@ -168,10 +175,10 @@ def build_chunk_mesh(world, chunk_pos, suppress, suppress_m):
         padded,
         FACES,
         FACE_VERTS,
-        color_table,
+        uv_table,
+        FACE_UVS,
         base_x, base_y, base_z
     )
-    
     if not suppress and not suppress_m:
         print(f"[DEBUG] - Meshing: {(time.perf_counter()-s)*1000:.2f}ms/chunk")
 
