@@ -41,7 +41,7 @@ class Renderer:
 
         vao = self.ctx.vertex_array(
             self.program,
-            [(vbo, "3f 3f 2f", "aPos", "aNormal", "uvCoords")],
+            [(vbo, "3f 3f 2f 1f", "aPos", "aNormal", "uvCoords", "aAO")],
             index_buffer=ibo
         )
 
@@ -73,7 +73,7 @@ class Renderer:
         
     def render(self, camera):
         self.ctx.enable(moderngl.DEPTH_TEST)
-        self.ctx.clear(0.1, 0.1, 0.1)
+        self.ctx.clear(0.8, 0.949, 1)
 
         proj = self.get_projection_matrix()
         view = camera.get_view_matrix()

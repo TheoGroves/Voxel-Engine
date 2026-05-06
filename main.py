@@ -16,7 +16,7 @@ SUPPRESS_GEN = True
 SUPPRESS_MESHING = True
 SUPPRESS_TRIS = True
 
-RENDER_DIST = 4
+RENDER_DIST = 8
 streamed_chunks = set()
 needed_now = set()
 needed_snapshot = set()
@@ -217,6 +217,6 @@ while True:
     tot_tris = renderer.render(cam)
     if not SUPPRESS_WARNINGS and not SUPPRESS_TRIS:
         print(f"[DEBUG] {tot_tris} triangles are being rendered")
-    pygame.display.set_caption(f"Voxel Engine | FPS: {clock.get_fps():.1f}")
+    pygame.display.set_caption(f"Voxel Engine | FPS: {clock.get_fps():.1f} | x: {cam_pos[0]:.1f} y: {cam_pos[1]:.1f} z: {cam_pos[2]:.1f}")
     pygame.display.flip()
     dt = clock.tick(60) / 1000.0

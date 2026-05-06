@@ -31,6 +31,51 @@ FACE_VERTS = np.array([
     [[0,0,0],[0,0,1],[0,1,1],[0,1,0]],
 ], dtype=np.float32)
 
+AO_OFFSETS = np.array([
+    [
+        [[-1, 0, 0], [0, -1, 0], [-1, -1, 0]],
+        [[ 1, 0, 0], [0, -1, 0], [ 1, -1, 0]],
+        [[ 1, 0, 0], [0,  1, 0], [ 1,  1, 0]],
+        [[-1, 0, 0], [0,  1, 0], [-1,  1, 0]],
+    ],
+
+    [
+        [[ 1, 0, 0], [0, -1, 0], [ 1, -1, 0]],
+        [[-1, 0, 0], [0, -1, 0], [-1, -1, 0]],
+        [[-1, 0, 0], [0,  1, 0], [-1,  1, 0]],
+        [[ 1, 0, 0], [0,  1, 0], [ 1,  1, 0]],
+    ],
+
+    [
+        [[-1, 0, 0], [0, 0,  1], [-1, 0,  1]],
+        [[ 1, 0, 0], [0, 0,  1], [ 1, 0,  1]],
+        [[ 1, 0, 0], [0, 0, -1], [ 1, 0, -1]],
+        [[-1, 0, 0], [0, 0, -1], [-1, 0, -1]],
+    ],
+
+    [
+        [[-1, 0, 0], [0, 0, -1], [-1, 0, -1]],
+        [[ 1, 0, 0], [0, 0, -1], [ 1, 0, -1]],
+        [[ 1, 0, 0], [0, 0,  1], [ 1, 0,  1]],
+        [[-1, 0, 0], [0, 0,  1], [-1, 0,  1]],
+    ],
+
+    [
+        [[0, 0,  1], [0, -1, 0], [0, -1,  1]],
+        [[0, 0, -1], [0, -1, 0], [0, -1, -1]],
+        [[0, 0, -1], [0,  1, 0], [0,  1, -1]],
+        [[0, 0,  1], [0,  1, 0], [0,  1,  1]],
+    ],
+
+    [
+        [[0, 0, -1], [0, -1, 0], [0, -1, -1]],
+        [[0, 0,  1], [0, -1, 0], [0, -1,  1]],
+        [[0, 0,  1], [0,  1, 0], [0,  1,  1]],
+        [[0, 0, -1], [0,  1, 0], [0,  1, -1]],
+    ],
+
+], dtype=np.int32)
+
 t_sum = 0
 t_num = 0
 
@@ -84,7 +129,7 @@ def mesh_core(padded, faces, face_verts, uv_table, face_uvs, base_x, base_y, bas
     max_verts = size*size*size*24
     max_indices = size*size*size*36
 
-    verts = np.empty((max_verts, 8), dtype=np.float32)
+    verts = np.empty((max_verts, 9), dtype=np.float32)
     indices = np.empty((max_indices,), dtype=np.uint32)
 
     v_i = 0
@@ -130,6 +175,23 @@ def mesh_core(padded, faces, face_verts, uv_table, face_uvs, base_x, base_y, bas
                         u = u0 + fu * (u1 - u0)
                         v = v0 + fv * (v1 - v0)
 
+                        s1x, s1y, s1z = AO_OFFSETS[f, k, 0]
+                        s2x, s2y, s2z = AO_OFFSETS[f, k, 1]
+                        cx2, cy2, cz2 = AO_OFFSETS[f, k, 2]
+
+                        sx = px + fx
+                        sy = py + fy
+                        sz = pz + fz
+
+                        side1 = padded[sx + s1x, sy + s1y, sz + s1z] != 0
+                        side2 = padded[sx + s2x, sy + s2y, sz + s2z] != 0
+                        corner = padded[sx + cx2, sy + cy2, sz + cz2] != 0
+
+                        if side1 and side2:
+                            ao = 0.0
+                        else:
+                            ao = float(3 - (side1 + side2 + corner)) / 3.0
+
                         verts[v_i, 0] = cx_ + wx
                         verts[v_i, 1] = cy_ + wy
                         verts[v_i, 2] = cz_ + wz
@@ -138,6 +200,7 @@ def mesh_core(padded, faces, face_verts, uv_table, face_uvs, base_x, base_y, bas
                         verts[v_i, 5] = fz
                         verts[v_i, 6] = u
                         verts[v_i, 7] = v
+                        verts[v_i, 8] = ao
 
                         v_i += 1
 

@@ -18,14 +18,14 @@ def fill_chunk(blocks, heightmap, base_y):
     for lx in range(size):
         for lz in range(size):
             h = heightmap[lx, lz]
-            height = int(h * (size * 16))
+            height = int(h * (size * 32))
 
             hx = heightmap[lx+1, lz]
             hz = heightmap[lx, lz+1]
 
             dx = hx - h
             dz = hz - h
-            steepness = (dx*dx + dz*dz) ** 0.5 * 100
+            steepness = (dx*dx + dz*dz) ** 0.5 * 200
 
             for ly in range(size):
                 world_y = base_y + ly
@@ -97,16 +97,16 @@ class World:
 
         wx, wz = np.meshgrid(xs, zs, indexing='ij')
 
-        heightmap = ((noise.fbm(wx * 0.005 + 10000,
-                                wz * 0.005 + 10000,
-                                5) + 1) * 0.5) ** 3
+        heightmap = ((noise.fbm(wx * 0.002 + 10000,
+                                wz * 0.002 + 10000,
+                                6) + 1) * 0.5) ** 3
 
         fill_chunk(chunk.blocks, heightmap, base_y)
 
         chunk.generated = True
         self.update_chunk_flags(chunk)
 
-    def get_stream_chunks(self, player_pos, render_dist, y_range=6):
+    def get_stream_chunks(self, player_pos, render_dist, y_range=10):
         px, py, pz = player_pos
         pcx, pcy, pcz = self.world_to_chunk(px, py, pz)
         pcx = int(pcx)
