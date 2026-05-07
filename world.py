@@ -17,22 +17,34 @@ def fill_chunk(blocks, heightmap, base_y):
 
     for lx in range(size):
         for lz in range(size):
+
             h = heightmap[lx, lz]
             height = int(h * (size * 32))
 
-            hx = heightmap[lx+1, lz]
-            hz = heightmap[lx, lz+1]
+            if lx < size - 1:
+                hx = heightmap[lx + 1, lz]
+            else:
+                hx = h
+
+            if lz < size - 1:
+                hz = heightmap[lx, lz + 1]
+            else:
+                hz = h
 
             dx = hx - h
             dz = hz - h
-            steepness = (dx*dx + dz*dz) ** 0.5 * 200
+            steepness = (dx * dx + dz * dz) ** 0.5 * 200.0
 
             for ly in range(size):
                 world_y = base_y + ly
 
-                if world_y == height: # Top layer by steepness
+                block = 0
+
+                if world_y == height:
+                    # deterministic pseudo-random instead of np.random
+                    r = (lx * 928371 + lz * 1237 + base_y * 17) & 255
                     if steepness > 0.5:
-                        if np.random.random_sample() > 0.3:
+                        if r > 180:
                             block = 3
                         else:
                             block = 4
@@ -40,14 +52,17 @@ def fill_chunk(blocks, heightmap, base_y):
                         block = 1
                     else:
                         block = 2
-                elif world_y <= height-4: # Below dirt is rock
+
+                elif world_y <= height - 4:
                     block = 3
-                elif world_y <= height-1: # Just below top layer is dirt/rock
+
+                elif world_y <= height - 1:
                     if steepness > 0.5:
                         block = 3
                     else:
                         block = 1
-                else: # Everything else is air
+
+                else:
                     block = 0
 
                 blocks[lx, ly, lz] = block
@@ -97,9 +112,9 @@ class World:
 
         wx, wz = np.meshgrid(xs, zs, indexing='ij')
 
-        heightmap = ((noise.fbm(wx * 0.002 + 10000,
+        heightmap = (((noise.fbm(wx * 0.002 + 10000,
                                 wz * 0.002 + 10000,
-                                6) + 1) * 0.5) ** 3
+                                6) + 1) * 0.5) ** 3).reshape(CHUNK_SIZE + 1, CHUNK_SIZE + 1).astype(np.float32)
 
         fill_chunk(chunk.blocks, heightmap, base_y)
 
