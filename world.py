@@ -97,6 +97,7 @@ class World:
 
         chunk.is_empty_cache = np.all(arr == 0)
         chunk.is_full_cache = np.all(arr != 0)
+        chunk.dirty = True
 
     def generate_chunk(self, cx, cy, cz, noise: PerlinNoise2D):
         chunk = self.get_chunk(cx, cy, cz)
@@ -148,6 +149,7 @@ class Chunk:
     def __init__(self):
         self.blocks = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), dtype=np.uint8)
         self.generated = False
+        self.dirty = False
 
         self.is_empty_cache = True
         self.is_full_cache = False
@@ -157,6 +159,7 @@ class Chunk:
     
     def set(self, x, y, z, value):
         self.blocks[x,y,z] = value
+        self.dirty = True
 
     def is_empty(self):
         return np.all(self.blocks == 0)

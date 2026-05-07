@@ -68,7 +68,9 @@ def gen_worker():
         get_s = time.perf_counter()
         cx, cy, cz = pos
 
-        world.get_chunk(cx, cy, cz)
+        chunk = world.get_chunk(cx, cy, cz)
+        if chunk.generated:
+            continue
         get_t = time.perf_counter()-get_s
         gen_s = time.perf_counter()
         world.generate_chunk(cx, cy, cz, pn)
@@ -162,7 +164,7 @@ ctx = moderngl.create_context()
 renderer = Renderer(ctx, screen_width, screen_height)
 renderer.load_atlas(th.atlas)
 
-cam = Camera()
+cam = Camera((0, 50, 0))
 
 world = World()
 
@@ -178,7 +180,38 @@ while True:
             raise SystemExit
     
     cam_old_pos = cam.position
-    cam.process_inputs(pygame.key.get_pressed(), dt)
+    keys = pygame.key.get_pressed()
+    cam.process_inputs(keys, dt)
+
+    if pygame.mouse.get_pressed()[0]:
+        bx, by, bz = int(cam_pos[0]), int(cam_pos[1]), int(cam_pos[2])
+        world.set_block(bx, by, bz, 2)
+
+        cx = bx // 16
+        cy = by // 16
+        cz = bz // 16
+
+        to_remesh = {(cx, cy, cz)}
+
+        if bx % 16 == 0:
+            to_remesh.add((cx - 1, cy, cz))
+        if bx % 16 == 15:
+            to_remesh.add((cx + 1, cy, cz))
+
+        if by % 16 == 0:
+            to_remesh.add((cx, cy - 1, cz))
+        if by % 16 == 15:
+            to_remesh.add((cx, cy + 1, cz))
+
+        if bz % 16 == 0:
+            to_remesh.add((cx, cy, cz - 1))
+        if bz % 16 == 15:
+            to_remesh.add((cx, cy, cz + 1))
+
+        with mesh_lock:
+            for pos in to_remesh:
+                heapq.heappush(mesh_queue, (0, pos))
+
     cam_pos = cam.position
     cam_last_pos = cam_old_pos
     needed = world.get_stream_chunks(cam_pos, RENDER_DIST)
@@ -205,6 +238,8 @@ while True:
             heapq.heappush(gen_queue, (priority, pos))
 
         streamed_chunks.add(pos)
+        c = world.get_chunk(pos[0], pos[1], pos[2])
+        c.dirty = True
 
         count += 1
         if count >= MAX_STREAM_PER_FRAME:
@@ -217,6 +252,6 @@ while True:
     tot_tris = renderer.render(cam)
     if not SUPPRESS_WARNINGS and not SUPPRESS_TRIS:
         print(f"[DEBUG] {tot_tris} triangles are being rendered")
-    pygame.display.set_caption(f"Voxel Engine | FPS: {clock.get_fps():.1f} | x: {cam_pos[0]:.1f} y: {cam_pos[1]:.1f} z: {cam_pos[2]:.1f}")
+    pygame.display.set_caption(f"Voxel Engine | FPS: {clock.get_fps():.1f} | x: {cam_pos[0]:.1f} y: {cam_pos[1]:.1f} z: {cam_pos[2]:.1f} | Tris: {tot_tris}")
     pygame.display.flip()
     dt = clock.tick(60) / 1000.0

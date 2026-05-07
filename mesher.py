@@ -242,6 +242,7 @@ def build_chunk_mesh(world, chunk_pos, suppress, suppress_m, uv_table):
         FACE_UVS,
         base_x, base_y, base_z
     )
+    chunk.dirty = False
     if not suppress and not suppress_m:
         print(f"[DEBUG] - Meshing: {(time.perf_counter()-s)*1000:.2f}ms/chunk")
 
