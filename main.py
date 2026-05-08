@@ -57,6 +57,7 @@ def gen_worker():
         pos_s = time.perf_counter()
         with gen_lock:
             if len(gen_queue) == 0:
+                time.sleep(0.1)
                 continue
             _, pos = heapq.heappop(gen_queue)
 
@@ -116,6 +117,7 @@ def structure_worker():
     while True:
         with structure_lock:
             if len(structure_queue) == 0:
+                time.sleep(0.1)
                 continue
 
             priority, pos = heapq.heappop(structure_queue)
@@ -161,6 +163,7 @@ def mesh_worker():
     while True:
         with mesh_lock:
             if len(mesh_queue) == 0:
+                time.sleep(0.1)
                 continue
             priority, pos = heapq.heappop(mesh_queue)
 
