@@ -54,3 +54,4 @@ while running:
 
 pygame.quit()
 
+lattice.save_structure()

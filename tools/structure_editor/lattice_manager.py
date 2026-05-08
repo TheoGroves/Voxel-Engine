@@ -24,6 +24,19 @@ class LatticeManager:
     def place_block(self, pos, block_type):
         self.lattice[self.layer][pos[1]][pos[0]] = block_type
 
+    def save_structure(self):
+        to_store = []
+        for z in range(len(self.lattice)):
+            for y in range(len(self.lattice[z])):
+                for x in range(len(self.lattice[z][y])):
+                    block_type = self.lattice[z][y][x]
+                    if block_type == 0:
+                        continue
+                    to_store.append(f"{x-self.middle[0]+1},{z},{y-self.middle[1]}:{block_type}\n")
+
+        with open(f"structures/{input('Enter structure name> ')}.struct", "w") as f:
+            f.writelines(to_store)
+
     def render_grid(self):
         plane = self.lattice[self.layer]
         for y in range(len(plane)):
