@@ -16,7 +16,7 @@ SUPPRESS_GEN = True
 SUPPRESS_MESHING = True
 SUPPRESS_TRIS = True
 
-RENDER_DIST = 8
+RENDER_DIST = 4
 streamed_chunks = set()
 needed_now = set()
 needed_snapshot = set()
@@ -40,8 +40,12 @@ meshed_chunks = set()
 cam_pos = (0,0,0)
 cam_last_pos = (0,0,0)
 
+STRUCTURE_RADIUS = 1
+structure_queue = []
+structure_lock = threading.Lock()
+
 th = TextureHandler(1024, 1024)
-th.pack(["textures/Empty.png", "textures/dirt.png", "textures/Grass.png", "textures/Rock.png", "textures/Cobblestone.png"])
+th.pack(["textures/Empty.png", "textures/Dirt.png", "textures/Grass.png", "textures/Rock.png", "textures/Cobblestone.png", "textures/Wood.png", "textures/Leaves.png"])
 th.save_atlas("textures/atlas.png")
 uv_table = th.build_uv_table()
 
@@ -69,21 +73,23 @@ def gen_worker():
         cx, cy, cz = pos
 
         chunk = world.get_chunk(cx, cy, cz)
-        if chunk.generated:
+        if chunk.terrain_generated or chunk.structures_generated:
             continue
         get_t = time.perf_counter()-get_s
         gen_s = time.perf_counter()
         world.generate_chunk(cx, cy, cz, pn)
+        chunk.terrain_generated = True
         generated_chunks.add(pos)
-        gen_t = time.perf_counter()-gen_s
 
         cx, cy, cz = pos
         cx2, cy2, cz2 = cam_last_pos
 
         priority = (cx - cx2)**2 + (cy - cy2)**2 + (cz - cz2)**2
 
-        with mesh_lock:
-            heapq.heappush(mesh_queue, (priority, pos))
+        with structure_lock:
+            heapq.heappush(structure_queue, (priority, pos))
+        gen_t = time.perf_counter()-gen_s
+
         fin_time = time.perf_counter()-s
         if not SUPPRESS_WARNINGS and not SUPPRESS_GEN:
             if fin_time*1000 > 5:
@@ -93,6 +99,45 @@ def gen_worker():
                 print(f"[WARNING] - {error}: Chunk generated in {(fin_time)*1000:.3f}ms:\n- Position: {pos_t*1000:.3f}ms\n- Chunk Fetch: {get_t*1000:.3f}ms\n- Chunk Generation: {gen_t*1000:.3f}ms\n")
 
 threading.Thread(target=gen_worker, daemon=True).start()
+
+def should_generate_structures(world, chunk_pos):
+    cx, cy, cz = chunk_pos
+
+    for dx in range(-1, 2):
+        for dz in range(-1, 2):
+            n = world.get_chunk(cx + dx, cy, cz + dz)
+
+            if n is None or not n.terrain_generated:
+                return False
+
+    return True
+
+def structure_worker():
+    while True:
+        with structure_lock:
+            if len(structure_queue) == 0:
+                continue
+
+            priority, pos = heapq.heappop(structure_queue)
+
+        if not should_generate_structures(world, pos):
+            with structure_lock:
+                heapq.heappush(structure_queue, (priority + 1, pos))
+            continue
+
+        chunk = world.get_chunk(*pos)
+
+        if chunk.structures_generated:
+            continue
+
+        world.generate_structures(*pos)
+
+        chunk.structures_generated = True
+
+        with mesh_lock:
+            heapq.heappush(mesh_queue, (priority, pos))
+
+threading.Thread(target=structure_worker, daemon=True).start()
 
 def should_mesh(world, chunk_pos):
     directions = [
@@ -107,7 +152,7 @@ def should_mesh(world, chunk_pos):
     cx, cy, cz = chunk_pos
     for dx, dy, dz in directions:
         n = world.get_chunk(cx+dx, cy+dy, cz+dz)
-        if n is None or not n.generated:
+        if n is None or not n.structures_generated:
             return False
     return True
 
@@ -234,11 +279,17 @@ while True:
 
         priority = (cx - cx2)**2 + (cy - cy2)**2 + (cz - cz2)**2
 
-        with gen_lock:
-            heapq.heappush(gen_queue, (priority, pos))
-
         streamed_chunks.add(pos)
         c = world.get_chunk(pos[0], pos[1], pos[2])
+        
+        if not c.terrain_generated:
+            with gen_lock:
+                heapq.heappush(gen_queue, (priority, pos))
+        else:
+            with mesh_lock:
+                heapq.heappush(mesh_queue, (priority, pos))
+
+        streamed_chunks.add(pos)
         c.dirty = True
 
         count += 1

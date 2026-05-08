@@ -100,7 +100,7 @@ def build_padded(world, chunk_pos):
 
     for fx, fy, fz in directions:
         neighbor = world.get_chunk(cx+fx, cy+fy, cz+fz)
-        if neighbor is None or not neighbor.generated:
+        if neighbor is None or not neighbor.terrain_generated:
             continue
 
         for i in range(size):

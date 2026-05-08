@@ -1,6 +1,7 @@
 from perlin import PerlinNoise2D
 import numpy as np
 from numba import njit, uint8, float32, int32, void
+import random
 
 CHUNK_SIZE = 16
 RENDER_DIST = 4
@@ -10,6 +11,7 @@ DIRT = 1
 GRASS = 2
 ROCK = 3
 COBBLE = 4
+WOOD = 5
 
 @njit(void(uint8[:, :, :], float32[:, :], int32), cache=True, fastmath=True)
 def fill_chunk(blocks, heightmap, base_y):
@@ -41,7 +43,6 @@ def fill_chunk(blocks, heightmap, base_y):
                 block = 0
 
                 if world_y == height:
-                    # deterministic pseudo-random instead of np.random
                     r = (lx * 928371 + lz * 1237 + base_y * 17) & 255
                     if steepness > 0.5:
                         if r > 180:
@@ -70,6 +71,8 @@ def fill_chunk(blocks, heightmap, base_y):
 class World:
     def __init__(self):
         self.chunks = {}
+
+        self.tree = Structure("structures/tree.struct")
 
     def get_chunk(self, cx, cy, cz):
         key = (cx, cy, cz)
@@ -119,8 +122,24 @@ class World:
 
         fill_chunk(chunk.blocks, heightmap, base_y)
 
-        chunk.generated = True
+        chunk.terrain_generated = True
         self.update_chunk_flags(chunk)
+
+    def generate_structures(self, cx, cy, cz):
+        chunk = self.get_chunk(cx, cy, cz)
+
+        base_x = cx * CHUNK_SIZE
+        base_y = cy * CHUNK_SIZE
+        base_z = cz * CHUNK_SIZE
+        if random.random() > 0.9:
+            surf = chunk.random_surface_block()
+            if surf[1] != 0:
+                local_pos = surf[0]
+                world_x = base_x + local_pos[0]
+                world_y = base_y + local_pos[1]
+                world_z = base_z + local_pos[2]
+                
+                self.tree.place_structure(self, (world_x, world_y, world_z))
 
     def get_stream_chunks(self, player_pos, render_dist, y_range=10):
         px, py, pz = player_pos
@@ -148,7 +167,8 @@ class World:
 class Chunk:
     def __init__(self):
         self.blocks = np.zeros((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), dtype=np.uint8)
-        self.generated = False
+        self.terrain_generated = False
+        self.structures_generated = False
         self.dirty = False
 
         self.is_empty_cache = True
@@ -163,3 +183,33 @@ class Chunk:
 
     def is_empty(self):
         return np.all(self.blocks == 0)
+    
+    def random_surface_block(self):
+        x = np.random.randint(0, CHUNK_SIZE)
+        z = np.random.randint(0, CHUNK_SIZE)
+        
+        column = self.blocks[x, :, z]
+        
+        non_air_indices = np.where(column != 0)[0]
+        
+        if non_air_indices.size > 0:
+            y = non_air_indices[-1]
+            return (x, y, z), self.blocks[x, y, z]
+        
+        return (x, 0, z), 0
+
+class Structure:
+    def __init__(self, path):
+        self.blocks = {}
+        with open(path, "r") as s:
+            for block_pos in s:
+                pos, block = block_pos.split(":")
+                x, y, z = pos.split(",")
+                block = int(block.strip())
+                self.blocks[(x,y,z)] = block
+
+    def place_structure(self, world:World, pos):
+        for block_pos in self.blocks:
+            block_type = self.blocks[block_pos]
+            # place structure just above ground
+            world.set_block(int(block_pos[0]) + pos[0], int(block_pos[1]) + pos[1]+1, int(block_pos[2]) + pos[2], block_type)
