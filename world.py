@@ -131,14 +131,14 @@ class World:
         base_x = cx * CHUNK_SIZE
         base_y = cy * CHUNK_SIZE
         base_z = cz * CHUNK_SIZE
-        if random.random() > 0.9:
+        if random.random() > 0.4:
             surf = chunk.random_surface_block()
-            if surf[1] != 0:
+            if surf[1] == 2:
                 local_pos = surf[0]
                 world_x = base_x + local_pos[0]
                 world_y = base_y + local_pos[1]
                 world_z = base_z + local_pos[2]
-                
+
                 self.tree.place_structure(self, (world_x, world_y, world_z))
 
     def get_stream_chunks(self, player_pos, render_dist, y_range=10):
